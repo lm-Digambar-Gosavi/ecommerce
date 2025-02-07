@@ -39,3 +39,28 @@ func TestCreate(t *testing.T) {
 	// Ensure all expectations are met
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestGetByID(t *testing.T) {
+	// Create a mock database
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	// Mock query response
+	rows := sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).
+		AddRow(1, "Digambar", "diga123@gmail.com", "diga123", "diga@123")
+
+	mock.ExpectQuery("select id, name, email, username, password from users where id=?").
+		WithArgs(1).WillReturnRows(rows)
+
+	userRepo := repository.NewUserRepo(db)
+
+	user, err := userRepo.GetByID(1)
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+
+	assert.Equal(t, "Digambar", user.Name)
+	assert.Equal(t, "diga123@gmail.com", user.Email)
+	assert.Equal(t, "diga123", user.Username)
+	assert.Equal(t, "diga@123", user.Password)
+}
