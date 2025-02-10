@@ -187,7 +187,7 @@ func TestDelete(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestDeleteUser_NotFound(t *testing.T) {
+func TestDelete_NotFound(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	assert.NoError(t, err)
 	defer db.Close()
