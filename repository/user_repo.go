@@ -85,9 +85,14 @@ func (r *userRepo) Update(user *models.User) error {
 
 func (r *userRepo) Delete(id int) error {
 	query := "delete from users where id=?"
-	_, err := r.db.Exec(query, id)
+	result, err := r.db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete user : %v", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("user with id %d not found", id)
 	}
 	return nil
 }
