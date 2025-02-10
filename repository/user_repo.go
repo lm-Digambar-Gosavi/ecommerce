@@ -78,8 +78,8 @@ func (r *userRepo) GetAll() ([]models.User, error) {
 }
 
 func (r *userRepo) Update(user *models.User) error {
-	_, err := r.db.Exec("update users set name = ?, email = ?, username = ?, password = ? WHERE id = ?",
-		user.Name, user.Email, user.Username, user.Password, user.Id)
+	query := "update users set name=?, email=?, username=?, password=? where id=?"
+	_, err := r.db.Exec(query, user.Name, user.Email, user.Username, user.Password, user.Id)
 	return err
 }
 

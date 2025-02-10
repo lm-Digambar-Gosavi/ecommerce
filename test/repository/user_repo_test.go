@@ -1,7 +1,6 @@
 package repository_test
 
 import (
-	//"database/sql"
 	"ecommerce/models"
 	"ecommerce/repository"
 	"testing"
@@ -63,4 +62,86 @@ func TestGetByID(t *testing.T) {
 	assert.Equal(t, "diga123@gmail.com", user.Email)
 	assert.Equal(t, "diga123", user.Username)
 	assert.Equal(t, "diga@123", user.Password)
+}
+
+func TestGetByUsername(t *testing.T) {
+	// Create a mock database
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).
+		AddRow(1, "Digambar", "diga123@gmail.com", "diga123", "diga@123")
+
+	mock.ExpectQuery("select id, name, email, username, password from users where username=?").
+		WithArgs("diga123").WillReturnRows(rows)
+
+	userRepo := repository.NewUserRepo(db)
+
+	user, err := userRepo.GetByUsername("diga123")
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+
+	assert.Equal(t, "Digambar", user.Name)
+}
+
+func TestGetAll(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).
+		AddRow(1, "Digambar", "diga123@gmail.com", "diga123", "diga@123").
+		AddRow(2, "Yash", "yash123@gmail.com", "yash123", "yash@123")
+
+	mock.ExpectQuery("select id, name, email, username, password from users").
+		WillReturnRows(rows)
+
+	userRepo := repository.NewUserRepo(db)
+
+	users, err := userRepo.GetAll()
+	assert.NoError(t, err)
+	assert.Len(t, users, 2)
+	assert.Equal(t, "Digambar", users[0].Name)
+	assert.Equal(t, "Yash", users[1].Name)
+}
+
+func TestUpdate(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec(`(?i)UPDATE users SET name=\?, email=\?, username=\?, password=\? WHERE id=\?`).
+		WithArgs("Updated Name", "updated@example.com", "updateduser", "newpassword", 1).
+		WillReturnResult(sqlmock.NewResult(0, 1)) // ✅ Correct result for UPDATE query
+
+	userRepo := repository.NewUserRepo(db)
+
+	user := &models.User{
+		Id:       1,
+		Name:     "Updated Name",
+		Email:    "updated@example.com",
+		Username: "updateduser",
+		Password: "newpassword",
+	}
+
+	err = userRepo.Update(user)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet()) // ✅ Ensure expectations are met
+}
+
+func TestDelete(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("delete from users where id=?").
+		WithArgs(1).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	userRepo := repository.NewUserRepo(db)
+
+	err = userRepo.Delete(1)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
