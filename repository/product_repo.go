@@ -67,7 +67,6 @@ func (r *productRepo) GetAll() ([]models.Product, error) {
 	return products, nil
 }
 
-// Update modifies an existing product
 func (r *productRepo) Update(product *models.Product) error {
 	_, err := r.db.Exec("update products set name = ?, price = ? WHERE id = ?",
 		product.Name, product.Price, product.ID)
@@ -76,9 +75,14 @@ func (r *productRepo) Update(product *models.Product) error {
 
 func (r *productRepo) Delete(id int) error {
 	query := "delete from products where id=?"
-	_, err := r.db.Exec(query, id)
+	result, err := r.db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete product: %v", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("product with id %d not found", id)
 	}
 	return nil
 }

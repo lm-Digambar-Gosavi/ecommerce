@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreate(t *testing.T) {
+func TestCreateUser(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	// db is a mocked database connection that behaves like a real *sql.DB obj
 	// mock is the controller that helps us set expectations
@@ -29,8 +29,8 @@ func TestCreate(t *testing.T) {
 
 	mock.ExpectExec("insert into users"). //expect an insert statement
 						WithArgs(user.Name, user.Email, user.Username, user.Password). //expected arguments
-						WillReturnResult(sqlmock.NewResult(0, 1))                      // returning a mock result.
-	// 0 → The inserted row ID.
+						WillReturnResult(sqlmock.NewResult(1, 1))                      // returning a mock result.
+	// 1 → The inserted row ID.
 	// 1 → One row affected (successful insert).
 
 	err = repo.Create(user)
@@ -38,87 +38,91 @@ func TestCreate(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetByID_Found(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer db.Close()
+func TestGetByIdUser(t *testing.T) {
+	t.Run("Found", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		assert.NoError(t, err)
+		defer db.Close()
 
-	mock.ExpectQuery("select id, name, email, username, password from users where id=?").
-		WithArgs(1). // query should be called with id=1
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123", "abhay@123"))
+		mock.ExpectQuery("select id, name, email, username, password from users where id=?").
+			WithArgs(1). // query should be called with id=1
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123", "abhay@123"))
 
-	repo := NewUserRepo(db)
+		repo := NewUserRepo(db)
 
-	user, err := repo.GetByID(1)
+		user, err := repo.GetByID(1)
 
-	assert.NoError(t, err) // should not return an error
-	assert.NotNil(t, user) // returned user should not be nil
-	assert.Equal(t, "abhay123", user.Username)
-	assert.Equal(t, "abhay@123", user.Password)
+		assert.NoError(t, err) // should not return an error
+		assert.NotNil(t, user) // returned user should not be nil
+		assert.Equal(t, "abhay123", user.Username)
+		assert.Equal(t, "abhay@123", user.Password)
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		assert.NoError(t, err)
+		defer db.Close()
+
+		mock.ExpectQuery("select id, name, email, username, password from users where id=?").
+			WithArgs(90).
+			WillReturnError(sql.ErrNoRows) // "database/sql"
+
+		repo := NewUserRepo(db)
+		user, err := repo.GetByID(90)
+
+		assert.Error(t, err) // function must return an error
+		assert.Nil(t, user)  // user should be nil.
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
-func TestGetByID_NotFound(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer db.Close()
+func TestGetByUsernameUser(t *testing.T) {
+	t.Run("Found", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		assert.NoError(t, err)
+		defer db.Close()
 
-	mock.ExpectQuery("select id, name, email, username, password from users where id=?").
-		WithArgs(90).
-		WillReturnError(sql.ErrNoRows) // "database/sql"
+		mock.ExpectQuery("select id, name, email, username, password from users where username=?").
+			WithArgs("abhay123").
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123", "abhay@123"))
 
-	repo := NewUserRepo(db)
-	user, err := repo.GetByID(90)
+		repo := NewUserRepo(db)
 
-	assert.Error(t, err) // function must return an error
-	assert.Nil(t, user)  // user should be nil.
+		user, err := repo.GetByUsername("abhay123")
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+		assert.NoError(t, err)
+		assert.NotNil(t, user)
+
+		assert.Equal(t, 1, user.Id)
+		assert.Equal(t, "abhay@123", user.Password)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		assert.NoError(t, err)
+		defer db.Close()
+
+		mock.ExpectQuery("select id, name, email, username, password from users where username=?").
+			WithArgs("abc@123").
+			WillReturnError(sql.ErrNoRows)
+
+		repo := NewUserRepo(db)
+
+		user, err := repo.GetByUsername("abc@123")
+
+		assert.Error(t, err)
+		assert.Nil(t, user)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
-func TestGetByUsername_Found(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer db.Close()
-
-	mock.ExpectQuery("select id, name, email, username, password from users where username=?").
-		WithArgs("abhay123").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123", "abhay@123"))
-
-	repo := NewUserRepo(db)
-
-	user, err := repo.GetByUsername("abhay123")
-
-	assert.NoError(t, err)
-	assert.NotNil(t, user)
-
-	assert.Equal(t, 1, user.Id)
-	assert.Equal(t, "abhay@123", user.Password)
-
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestGetByUsername_NotFound(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer db.Close()
-
-	mock.ExpectQuery("select id, name, email, username, password from users where username=?").
-		WithArgs("abc@123").
-		WillReturnError(sql.ErrNoRows)
-
-	repo := NewUserRepo(db)
-
-	user, err := repo.GetByUsername("abc@123")
-
-	assert.Error(t, err)
-	assert.Nil(t, user)
-
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestGetAll(t *testing.T) {
+func TestGetAllUser(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	assert.NoError(t, err)
 	defer db.Close()
@@ -145,7 +149,7 @@ func TestGetAll(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestUpdate(t *testing.T) {
+func TestUpdateUser(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	assert.NoError(t, err)
 	defer db.Close()
@@ -160,8 +164,8 @@ func TestUpdate(t *testing.T) {
 
 	mock.ExpectExec(regexp.QuoteMeta("update users set name=?, email=?, username=?, password=? where id=?")).
 		WithArgs(user.Name, user.Email, user.Username, user.Password, user.Id).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	// Row ID = 0,
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	// Row ID = 1,
 	// 1 row affected
 	repo := NewUserRepo(db)
 	err = repo.Update(user)
@@ -169,36 +173,38 @@ func TestUpdate(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestDelete(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer db.Close()
+func TestDeleteUser(t *testing.T) {
+	t.Run("Found", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		assert.NoError(t, err)
+		defer db.Close()
 
-	mock.ExpectExec("delete from users where id=?").
-		WithArgs(1).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	// Row ID = 0,
-	// 1 row affected
+		mock.ExpectExec("delete from users where id=?").
+			WithArgs(1).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		// Row ID = 1,
+		// 1 row affected
 
-	repo := NewUserRepo(db)
+		repo := NewUserRepo(db)
 
-	err = repo.Delete(1)
-	assert.NoError(t, err)
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
+		err = repo.Delete(1)
+		assert.NoError(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 
-func TestDelete_NotFound(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer db.Close()
+	t.Run("NotFound", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		assert.NoError(t, err)
+		defer db.Close()
 
-	mock.ExpectExec("delete from users where id=?").
-		WithArgs(90).
-		WillReturnResult(sqlmock.NewResult(0, 0)) // No rows affected
+		mock.ExpectExec("delete from users where id=?").
+			WithArgs(90).
+			WillReturnResult(sqlmock.NewResult(0, 0)) // No rows affected
 
-	repo := NewUserRepo(db)
-	err = repo.Delete(90)
+		repo := NewUserRepo(db)
+		err = repo.Delete(90)
 
-	assert.Error(t, err)
-	assert.NoError(t, mock.ExpectationsWereMet())
+		assert.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
