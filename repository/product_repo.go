@@ -68,7 +68,7 @@ func (r *productRepo) GetAll() ([]models.Product, error) {
 }
 
 func (r *productRepo) Update(product *models.Product) error {
-	_, err := r.db.Exec("update products set name = ?, price = ? WHERE id = ?",
+	_, err := r.db.Exec("update products set name = ?, price = ? where id = ?",
 		product.Name, product.Price, product.ID)
 	return err
 }

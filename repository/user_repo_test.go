@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"ecommerce/models"
+	"fmt"
 	"regexp"
 	"testing"
 
@@ -27,28 +28,38 @@ func TestCreateUser(t *testing.T) {
 
 	repo := NewUserRepo(db) // inject mock db
 
-	mock.ExpectExec("insert into users"). //expect an insert statement
-						WithArgs(user.Name, user.Email, user.Username, user.Password). //expected arguments
-						WillReturnResult(sqlmock.NewResult(1, 1))                      // returning a mock result.
-	// 1 → The inserted row ID.
-	// 1 → One row affected (successful insert).
+	t.Run("Success", func(t *testing.T) {
+		mock.ExpectExec("insert into users"). //expect an insert statement
+							WithArgs(user.Name, user.Email, user.Username, user.Password). //expected arguments
+							WillReturnResult(sqlmock.NewResult(1, 1))                      // returning a mock result.
+		// 1 → The inserted row ID.
+		// 1 → One row affected (successful insert).
 
-	err = repo.Create(user)
-	assert.NoError(t, err) // checks if the method returns an error.
-	assert.NoError(t, mock.ExpectationsWereMet())
+		err = repo.Create(user)
+		assert.NoError(t, err) // checks if the method returns an error.
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+	t.Run("Failer", func(t *testing.T) {
+		mock.ExpectExec("insert into users").
+			WithArgs(user.Name, user.Email, user.Username, user.Password).
+			WillReturnError(fmt.Errorf("failed to insert user"))
+
+		err = repo.Create(user)
+		assert.Error(t, err) // error due to failed query
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestGetByIdUser(t *testing.T) {
-	t.Run("Found", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		assert.NoError(t, err)
-		defer db.Close()
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
 
+	repo := NewUserRepo(db)
+	t.Run("Found", func(t *testing.T) {
 		mock.ExpectQuery("select id, name, email, username, password from users where id=?").
 			WithArgs(1). // query should be called with id=1
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123", "abhay@123"))
-
-		repo := NewUserRepo(db)
 
 		user, err := repo.GetByID(1)
 
@@ -59,17 +70,21 @@ func TestGetByIdUser(t *testing.T) {
 
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+	t.Run("Scan error", func(t *testing.T) {
+		mock.ExpectQuery("select id, name, email, username, password from users where id=?").
+			WithArgs(1).                                                               // query should be called with id=1
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "Abhay")) // Missing required columns
 
+		user, err := repo.GetByID(1)
+		assert.Error(t, err) // error due to scan failure
+		assert.Nil(t, user)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 	t.Run("NotFound", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		assert.NoError(t, err)
-		defer db.Close()
-
 		mock.ExpectQuery("select id, name, email, username, password from users where id=?").
 			WithArgs(90).
 			WillReturnError(sql.ErrNoRows) // "database/sql"
 
-		repo := NewUserRepo(db)
 		user, err := repo.GetByID(90)
 
 		assert.Error(t, err) // function must return an error
@@ -77,19 +92,19 @@ func TestGetByIdUser(t *testing.T) {
 
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
 }
 
 func TestGetByUsernameUser(t *testing.T) {
-	t.Run("Found", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		assert.NoError(t, err)
-		defer db.Close()
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
 
+	repo := NewUserRepo(db)
+	t.Run("Found", func(t *testing.T) {
 		mock.ExpectQuery("select id, name, email, username, password from users where username=?").
 			WithArgs("abhay123").
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123", "abhay@123"))
-
-		repo := NewUserRepo(db)
 
 		user, err := repo.GetByUsername("abhay123")
 
@@ -103,15 +118,9 @@ func TestGetByUsernameUser(t *testing.T) {
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		assert.NoError(t, err)
-		defer db.Close()
-
 		mock.ExpectQuery("select id, name, email, username, password from users where username=?").
 			WithArgs("abc@123").
 			WillReturnError(sql.ErrNoRows)
-
-		repo := NewUserRepo(db)
 
 		user, err := repo.GetByUsername("abc@123")
 
@@ -127,26 +136,52 @@ func TestGetAllUser(t *testing.T) {
 	assert.NoError(t, err)
 	defer db.Close()
 
-	mock.ExpectQuery("select id, name, email, username, password from users").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).
-			AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123", "abhay@123").
-			AddRow(2, "Alesh", "alesh123@gmail.com", "alesh123", "alesh@123"))
-
 	repo := NewUserRepo(db)
-	users, err := repo.GetAll()
 
-	assert.NoError(t, err)
-	assert.Len(t, users, 2) // ensures that exactly 2 users were returned
+	t.Run("Success", func(t *testing.T) {
+		mock.ExpectQuery("select id, name, email, username, password from users").
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username", "password"}).
+				AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123", "abhay@123").
+				AddRow(2, "Alesh", "alesh123@gmail.com", "alesh123", "alesh@123"))
 
-	assert.Equal(t, 1, users[0].Id)
-	assert.Equal(t, "abhay123", users[0].Username)
-	assert.Equal(t, "abhay@123", users[0].Password)
+		users, err := repo.GetAll()
 
-	assert.Equal(t, 2, users[1].Id)
-	assert.Equal(t, "alesh123", users[1].Username)
-	assert.Equal(t, "alesh@123", users[1].Password)
+		assert.NoError(t, err)
+		assert.Len(t, users, 2) // ensures that exactly 2 users were returned
 
-	assert.NoError(t, mock.ExpectationsWereMet())
+		assert.Equal(t, 1, users[0].Id)
+		assert.Equal(t, "abhay123", users[0].Username)
+		assert.Equal(t, "abhay@123", users[0].Password)
+
+		assert.Equal(t, 2, users[1].Id)
+		assert.Equal(t, "alesh123", users[1].Username)
+		assert.Equal(t, "alesh@123", users[1].Password)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+	t.Run("Fail", func(t *testing.T) {
+		mock.ExpectQuery("select id, name, email, username, password from users").
+			WillReturnError(fmt.Errorf("database error"))
+
+		users, err := repo.GetAll()
+
+		assert.Error(t, err)
+		assert.Nil(t, users)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+	t.Run("Scan Error", func(t *testing.T) {
+		mock.ExpectQuery("select id, name, email, username, password from users").
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "username"}). // missing "password" column
+													AddRow(1, "Abhay", "abhay123@gmail.com", "abhay123"))
+
+		users, err := repo.GetAll()
+
+		assert.Error(t, err)
+		assert.Nil(t, users)
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestUpdateUser(t *testing.T) {
@@ -174,18 +209,17 @@ func TestUpdateUser(t *testing.T) {
 }
 
 func TestDeleteUser(t *testing.T) {
-	t.Run("Found", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		assert.NoError(t, err)
-		defer db.Close()
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
 
+	repo := NewUserRepo(db)
+	t.Run("Found", func(t *testing.T) {
 		mock.ExpectExec("delete from users where id=?").
 			WithArgs(1).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		// Row ID = 1,
 		// 1 row affected
-
-		repo := NewUserRepo(db)
 
 		err = repo.Delete(1)
 		assert.NoError(t, err)
@@ -193,16 +227,22 @@ func TestDeleteUser(t *testing.T) {
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		assert.NoError(t, err)
-		defer db.Close()
-
 		mock.ExpectExec("delete from users where id=?").
 			WithArgs(90).
 			WillReturnResult(sqlmock.NewResult(0, 0)) // No rows affected
 
 		repo := NewUserRepo(db)
 		err = repo.Delete(90)
+
+		assert.Error(t, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+	t.Run("Fail", func(t *testing.T) {
+		mock.ExpectExec("delete from users where id=?").
+			WithArgs(1).
+			WillReturnError(fmt.Errorf("failed to delete user"))
+
+		err = repo.Delete(1)
 
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
