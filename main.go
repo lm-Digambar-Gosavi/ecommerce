@@ -6,6 +6,7 @@ import (
 	"ecommerce/middleware"
 	"ecommerce/repository"
 	"ecommerce/services"
+	"ecommerce/utils"
 	"fmt"
 
 	"net/http"
@@ -25,11 +26,14 @@ func main() {
 	userHandler := handler.NewUserHandler(userService)
 
 	r := chi.NewRouter()
+	verifier := utils.JWTVerifier{}
 
 	r.Post("/login", userHandler.LoginHandler)
 
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth)
+		r.Use(func(next http.Handler) http.Handler {
+			return middleware.Auth(verifier, next)
+		})
 
 		r.Post("/products", productHandler.CreateProduct)
 		r.Get("/products/{id}", productHandler.GetProductByID)
