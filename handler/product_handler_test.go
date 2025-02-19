@@ -204,42 +204,91 @@ func TestUpdateProduct(t *testing.T) {
 	reqBody, _ := json.Marshal(product)
 
 	t.Run("Success", func(t *testing.T) {
-		req := httptest.NewRequest("Put", "/update", bytes.NewBuffer(reqBody))
+		req := httptest.NewRequest("PUT", "/product/1", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		res := httptest.NewRecorder()
+		rec := httptest.NewRecorder()
 
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+
+		mockService.On("GetProductByID", 1).Return(&product, nil)
 		mockService.On("UpdateProduct", &product).Return(nil)
 
-		handler.UpdateProduct(res, req)
+		handler.UpdateProduct(rec, req)
 
-		assert.Equal(t, http.StatusOK, res.Code)
-		assert.Contains(t, res.Body.String(), "Product updated successfully")
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), "Product updated successfully")
+	})
+	t.Run("Invalid Product ID", func(t *testing.T) {
+		req := httptest.NewRequest("PUT", "/product/abc", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "abc") // Non-numeric ID
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+
+		handler.UpdateProduct(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "Invalid user ID")
 	})
 	t.Run("Invalid request", func(t *testing.T) {
-		product := `{
-			"ID":    1,
-			"Name":  "Laptop",
+		invalidJSON := `{
+			"ID": 1,
+			"Name": "Laptop",
 			"Price": ,
 		}`
+		req := httptest.NewRequest("PUT", "/product/1", bytes.NewBuffer([]byte(invalidJSON)))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
 
-		res := httptest.NewRecorder()
-		req := httptest.NewRequest("Put", "/update", bytes.NewBuffer([]byte(product)))
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 
-		handler.UpdateProduct(res, req)
+		handler.UpdateProduct(rec, req)
 
-		assert.Equal(t, res.Code, http.StatusBadRequest)
-		assert.Contains(t, res.Body.String(), "Invalid request ")
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "Invalid request")
 	})
-	t.Run("Fail", func(t *testing.T) {
+	t.Run("Product Not Found", func(t *testing.T) {
 		mockService.ExpectedCalls = nil
-		res := httptest.NewRecorder()
-		req := httptest.NewRequest("Put", "/update", bytes.NewBuffer(reqBody))
 
-		mockService.On("UpdateProduct", &product).Return(errors.New("Failed"))
+		req := httptest.NewRequest("PUT", "/product/1", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
 
-		handler.UpdateProduct(res, req)
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 
-		assert.Equal(t, res.Code, http.StatusInternalServerError)
+		mockService.On("GetProductByID", 1).Return((*models.Product)(nil), errors.New("product not found"))
+
+		handler.UpdateProduct(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, rec.Body.String(), "Product not found")
+	})
+	t.Run("Update Product Failure", func(t *testing.T) {
+		mockService.ExpectedCalls = nil
+
+		req := httptest.NewRequest("PUT", "/product/1", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+
+		mockService.On("GetProductByID", 1).Return(&product, nil)
+		mockService.On("UpdateProduct", &product).Return(errors.New("database error"))
+
+		handler.UpdateProduct(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, rec.Body.String(), "database error")
 	})
 }
 

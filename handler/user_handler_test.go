@@ -302,10 +302,16 @@ func TestUpdateUser(t *testing.T) {
 	reqBody, _ := json.Marshal(user)
 
 	t.Run("Success", func(t *testing.T) {
-		req := httptest.NewRequest("PUT", "/user", bytes.NewBuffer(reqBody))
+		req := httptest.NewRequest("PUT", "/user/1", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
+		// Inject the id parameter into the request context
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+
+		mockService.On("GetUserByID", 1).Return(&user, nil)
 		mockService.On("UpdateUser", &user).Return(nil)
 
 		handler.UpdateUser(rec, req)
@@ -313,34 +319,77 @@ func TestUpdateUser(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), "User updated successfully")
 	})
+	t.Run("Invalid User ID", func(t *testing.T) {
+		req := httptest.NewRequest("PUT", "/user/abc", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "abc") // Non-numeric ID
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+
+		handler.UpdateUser(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "Invalid user ID")
+	})
 	t.Run("Invalid JSON", func(t *testing.T) {
 		invalidJSON := `{
 		"Id": 1, 
 		"Name": "Yash", 
 		"Email": "invalid-email",
 		}`
-		req := httptest.NewRequest("PUT", "/user", bytes.NewBuffer([]byte(invalidJSON)))
+		req := httptest.NewRequest("PUT", "/user/1", bytes.NewBuffer([]byte(invalidJSON)))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
+
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
 
 		handler.UpdateUser(rec, req)
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		assert.Contains(t, rec.Body.String(), "Invalid request")
 	})
-	t.Run("Failure", func(t *testing.T) {
+
+	t.Run("Failure - User Not Found", func(t *testing.T) {
 		mockService.ExpectedCalls = nil
 
-		req := httptest.NewRequest("PUT", "/user", bytes.NewBuffer(reqBody))
+		req := httptest.NewRequest("PUT", "/user/1", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
-		mockService.On("UpdateUser", &user).Return(errors.New("user not found"))
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+
+		mockService.On("GetUserByID", 1).Return((*models.User)(nil), errors.New("user not found"))
+		mockService.On("UpdateUser", &user).Return(errors.New("database error"))
 
 		handler.UpdateUser(rec, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Contains(t, rec.Body.String(), "user not found")
+		assert.Contains(t, rec.Body.String(), "User not found")
+	})
+	t.Run("UpdateUser Failure", func(t *testing.T) {
+		mockService.ExpectedCalls = nil // Clear previous expectations
+
+		req := httptest.NewRequest("PUT", "/user/1", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		chiCtx := chi.NewRouteContext()
+		chiCtx.URLParams.Add("id", "1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+
+		mockService.On("GetUserByID", 1).Return(&user, nil)
+		mockService.On("UpdateUser", &user).Return(errors.New("database error"))
+
+		handler.UpdateUser(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Contains(t, rec.Body.String(), "database error")
 	})
 }
 
