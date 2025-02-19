@@ -16,10 +16,10 @@ type UserRepo interface {
 }
 
 type userRepo struct {
-	db *sql.DB
+	db *sql.DB // hold the database connection
 }
 
-func NewUserRepo(db *sql.DB) UserRepo {
+func NewUserRepo(db *sql.DB) UserRepo { // constructor
 	return &userRepo{db: db}
 }
 

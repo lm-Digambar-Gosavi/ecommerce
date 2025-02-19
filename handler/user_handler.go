@@ -85,14 +85,40 @@ func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	var user models.User
-	err := json.NewDecoder(r.Body).Decode(&user)
+	idstr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idstr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	var updatedUser models.User
+	err = json.NewDecoder(r.Body).Decode(&updatedUser)
 	if err != nil {
 		http.Error(w, "Invalid request ", http.StatusBadRequest)
 		return
 	}
 
-	err = h.userService.UpdateUser(&user)
+	// Retrieve existing user details from the database
+	existingUser, err := h.userService.GetUserByID(id)
+	if err != nil || existingUser == nil {
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+	if updatedUser.Name != "" {
+		existingUser.Name = updatedUser.Name
+	}
+	if updatedUser.Email != "" {
+		existingUser.Email = updatedUser.Email
+	}
+	if updatedUser.Username != "" {
+		existingUser.Username = updatedUser.Username
+	}
+	if updatedUser.Password != "" {
+		existingUser.Password = updatedUser.Password
+	}
+
+	err = h.userService.UpdateUser(existingUser)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

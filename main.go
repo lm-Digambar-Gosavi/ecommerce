@@ -38,14 +38,14 @@ func main() {
 		r.Post("/products", productHandler.CreateProduct)
 		r.Get("/products/{id}", productHandler.GetProductByID)
 		r.Get("/products", productHandler.GetAllProducts)
-		r.Put("/products", productHandler.UpdateProduct)
+		r.Put("/products/{id}", productHandler.UpdateProduct)
 		r.Delete("/products/{id}", productHandler.DeleteProducts)
 	})
 
 	r.Post("/users", userHandler.RegisterUser)
 	r.Get("/users/{id}", userHandler.GetUserByID)
 	r.Get("/users", userHandler.GetAllUsers)
-	r.Put("/users", userHandler.UpdateUser)
+	r.Put("/users/{id}", userHandler.UpdateUser)
 	r.Delete("/users/{id}", userHandler.DeleteUser)
 
 	fmt.Println("Server started on : 8080")

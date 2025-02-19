@@ -66,14 +66,34 @@ func (h *ProductHandler) GetAllProducts(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
-	var product models.Product
-	err := json.NewDecoder(r.Body).Decode(&product)
+	idstr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idstr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	var updatedProduct models.Product
+	err = json.NewDecoder(r.Body).Decode(&updatedProduct)
 	if err != nil {
 		http.Error(w, "Invalid request ", http.StatusBadRequest)
 		return
 	}
 
-	err = h.productService.UpdateProduct(&product)
+	// Retrieve existing user details from the database
+	existingProduct, err := h.productService.GetProductByID(id)
+	if err != nil || existingProduct == nil {
+		http.Error(w, "Product not found", http.StatusInternalServerError)
+		return
+	}
+	if updatedProduct.Name != "" {
+		existingProduct.Name = updatedProduct.Name
+	}
+	if updatedProduct.Price != 0 {
+		existingProduct.Price = updatedProduct.Price
+	}
+
+	err = h.productService.UpdateProduct(existingProduct)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
